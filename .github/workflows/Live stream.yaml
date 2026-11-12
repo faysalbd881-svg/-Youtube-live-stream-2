@@ -1,0 +1,77 @@
+name: YouTube Live Stream
+
+on:
+  workflow_dispatch:
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Install FFmpeg and yt-dlp
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python3 -m pip install -U yt-dlp
+
+      - name: Download YouTube Video
+        env:
+          VIDEO_URL: ${{ secrets.VIDEO_URL }}
+        run: |
+          set -e
+
+          if [ -z "$VIDEO_URL" ]; then
+            echo "ERROR: VIDEO_URL secret is empty!"
+            exit 1
+          fi
+
+          yt-dlp \
+            --no-playlist \
+            --no-part \
+            --force-overwrites \
+            -f "best[ext=mp4]/best" \
+            --recode-video mp4 \
+            -o "input.%(ext)s" \
+            "$VIDEO_URL"
+
+          echo "Checking downloaded video..."
+
+          ls -lh input.mp4
+
+          ffprobe -v error \
+            -show_entries format=duration \
+            -of default=noprint_wrappers=1:nokey=1 \
+            input.mp4
+
+      - name: Start YouTube Live
+        env:
+          YT_STREAM_KEY: ${{ secrets.YT_STREAM_KEY }}
+        run: |
+          set -e
+
+          if [ -z "$YT_STREAM_KEY" ]; then
+            echo "ERROR: YouTube Stream Key is missing!"
+            exit 1
+          fi
+
+          test -s input.mp4
+
+          ffmpeg -hide_banner \
+            -re \
+            -stream_loop -1 \
+            -i input.mp4 \
+            -map 0:v:0 \
+            -map 0:a:0? \
+            -c:v libx264 \
+            -preset veryfast \
+            -b:v 2500k \
+            -maxrate 2500k \
+            -bufsize 5000k \
+            -pix_fmt yuv420p \
+            -g 60 \
+            -c:a aac \
+            -b:a 128k \
+            -ar 44100 \
+            -f flv \
+            "rtmp://a.rtmp.youtube.com/live2/$YT_STREAM_KEY"
