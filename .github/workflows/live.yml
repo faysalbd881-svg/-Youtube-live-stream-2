@@ -1,0 +1,36 @@
+
+name: YouTube Live Stream
+
+on:
+  workflow_dispatch:
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Start YouTube Live
+        env:
+          YT_STREAM_KEY: ${{ secrets.YT_STREAM_KEY }}
+          VIDEO_URL: ${{ secrets.VIDEO_URL }}
+        run: |
+          ffmpeg -re -stream_loop -1 \
+          -i "$VIDEO_URL" \
+          -c:v libx264 \
+          -preset veryfast \
+          -b:v 2500k \
+          -maxrate 2500k \
+          -bufsize 5000k \
+          -pix_fmt yuv420p \
+          -g 60 \
+          -c:a aac \
+          -b:a 128k \
+          -ar 44100 \
+          -f flv \
+          "rtmp://a.rtmp.youtube.com/live2/$YT_STREAM_KEY"
